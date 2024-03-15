@@ -1,0 +1,131 @@
+{% extends 'layout.html' %}
+{% load static %}
+
+{% block title %}
+<style>
+  .price{
+    color: green;
+  }
+</style>
+<script>
+  document.addEventListener("DOMContentLoaded", function(){
+    const roomName = '{{ room_name }}';
+    queryString = window.location.search;
+    queryString = queryString.substring(1);
+    
+    // Initialize chart
+    var ctx = document.getElementById('myChart').getContext('2d');
+    var chart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: [],
+            datasets: [{
+                label: 'Stock Price',
+                data: [],
+                borderColor: 'blue',
+                borderWidth: 1,
+                fill: false
+            }]
+        },
+        options: {
+            scales: {
+                xAxes: [{
+                    type: 'time',
+                    time: {
+                        unit: 'minute'
+                    },
+                    distribution: 'linear',
+                    ticks: {
+                        source: 'auto',
+                        autoSkip: true
+                    }
+                }]
+            }
+        }
+    });
+
+    const StockSocket = new WebSocket(
+        "ws://" + window.location.host + "/ws/stock/" + roomName + '/' + '?' + queryString
+    );
+
+    StockSocket.onmessage = function(event){
+        const data = JSON.parse(event.data);
+        console.log(data)
+        for(const[key, value] of Object.entries(data)){
+            document.getElementById(key + "_price").innerHTML = value["Quote Price"];
+            updateChart(data);
+        }
+    };
+
+    function updateChart(data) {
+    for(const[key, value] of Object.entries(data)){
+        // Extract data from the incoming message
+        var timestamp = new Date();
+        var stockPrice = value["Quote Price"]; // Access the "Quote Price" property
+
+        // Add the new data point to the chart
+        chart.data.labels.push(timestamp);
+        chart.data.datasets[0].data.push(stockPrice);
+
+        // Limit the number of data points displayed on the chart
+        const maxDataPoints = 20;
+        if (chart.data.labels.length > maxDataPoints) {
+            chart.data.labels.shift();
+            chart.data.datasets[0].data.shift();
+        }
+    }
+
+    // Update the chart
+    chart.update();
+}
+});
+
+</script>
+
+{% load filter %}
+<title>Selected Stocks</title>
+{% endblock %}
+{% block body %}
+{{room_name|json_script:"room-name"}}
+<div class="container">
+  <h1>Live Stock Price Display</h1>
+   <table class = "table-container">
+  <table class="table table-hover">
+      <thead>
+        <tr>
+          <th scope="col">Sr</th>
+          <th scope="col">Stock Name</th>
+          <th scope="col">Price</th>
+          <th scope="col">Previous Close</th>
+          <th scope="col">Open</th>
+          <th scope="col">Market Cap</th>
+          <th scope="col">Volume</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for key, value in data.items %}
+        <tr>
+        <td>{{forloop.counter}}</td>
+         <td>{{key}}</td>
+         <td class = "price" id = "{{key}}_price">{{value|get:"Quote Price"|floatformat:2}}</td>
+         <td>{{value|get:"Previous Close"|floatformat:2}}</td>
+         <td>{{value|get:"Open"|floatformat:2}}</td>
+         <td>{{value|get:"Market Cap"}}</td>
+         <td>{{value|get:"Volume"}}</td>
+         <td></td>
+         <td></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    </table>
+
+    <h1>Charts</h1>
+    {% for key, value in data.items %}
+    <h1>Chat {{key}}</h1>
+    <canvas id="{{key}}_myChart" width="500" height="400"></canvas>
+    {% endfor %}
+
+       
+</div>
+{% endblock %}
